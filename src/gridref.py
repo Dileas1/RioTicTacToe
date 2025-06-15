@@ -1,13 +1,11 @@
 from typing import Self, TypeVar
+from collections.abc import Callable
 
 T = TypeVar('T')
 
 
 class GridRef(object):
-    _i: int
-    _j: int
-
-    def __init__(self: Self, i: int, j: int):
+    def __init__(self: Self, i: int, j: int) -> None:
         self._i = i
         self._j = j
 
@@ -18,13 +16,12 @@ class GridRef(object):
         grid[self._i][self._j] = val
 
     @staticmethod
-    def get_lambda(grid: list[list[T]]):
+    def get_lambda(grid: list[list[T]]) -> Callable[..., T]:
         def wrapper(ref: GridRef) -> T:
             return ref.get(grid)
         return wrapper
 
-    @staticmethod
-    def set_lambda(grid: list[list[T]], val: T):
-        def wrapper(ref: GridRef) -> None:
-            ref.set(grid, val)
-        return wrapper
+
+class GridRefList(list[GridRef]):
+    def get(self: Self, grid: list[list[T]]) -> list[T]:
+        return list(map(GridRef.get_lambda(grid), self))
