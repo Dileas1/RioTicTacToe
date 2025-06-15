@@ -81,10 +81,13 @@ class Board(object):
                 return False
         return True
 
+    def __gr2cs(self: Self, row: list[GridRef]) -> list[CellState]:
+        return list(map(GridRef.get_lambda(self._grid), row))
+
     def check_for_win(self: Self) -> CellState:
-        for line in self._map:
+        for row in self._map:
             for side in [CellState.X, CellState.O]:
-                if all(cell == CellState.X for cell in list(map(GridRef.get_lambda(self._grid), line))):
+                if all(cell == CellState.X for cell in self.__gr2cs(row)):
                     return side
         return CellState.EMPTY
 
