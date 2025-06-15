@@ -1,8 +1,12 @@
 import sys
+from src import *
 
 
 def main():
-    pass
+    b = Board(3)
+    print(b.check_for_win())
+
+
 
 
 if __name__ == "__main__":
