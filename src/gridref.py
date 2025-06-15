@@ -20,8 +20,3 @@ class GridRef(object):
         def wrapper(ref: GridRef) -> T:
             return ref.get(grid)
         return wrapper
-
-
-class GridRefList(list[GridRef]):
-    def get(self: Self, grid: list[list[T]]) -> list[T]:
-        return list(map(GridRef.get_lambda(grid), self))

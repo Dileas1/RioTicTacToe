@@ -4,7 +4,7 @@ from src import *
 
 def main():
     b = Board(3)
-    print(b)
+    print(b.check_for_win())
 
 
 if __name__ == "__main__":

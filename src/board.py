@@ -1,6 +1,6 @@
 from typing import Self, TypeVar
 from enum import StrEnum
-from .gridref import GridRef, GridRefList
+from .gridref import GridRef
 
 T = TypeVar('T')
 
@@ -27,7 +27,7 @@ class BoardException(Exception):
 
 class Board(object):
     _grid: list[list[CellState]]
-    _map: list[GridRefList]
+    _map: list[list[GridRef]]
 
     @staticmethod
     def rotate45(grid: list[list[T]], reverse: bool = False) -> list[list[T]]:
@@ -61,10 +61,10 @@ class Board(object):
         if size not in [3, 4, 5, 6]:
             raise BoardException("Size must be from 3 to 6.")
         self._grid = [[CellState.EMPTY for _ in range(size)] for _ in range(size)]
-        self._map = list(map(GridRefList, Board.find_all_lines(
+        self._map = Board.find_all_lines(
             [[GridRef(j, i) for i in range(size)] for j in range(size)],
             WINNING_LENGTH_PER_GRID_SIZE[size]
-        )))
+        )
 
     def size(self: Self) -> int:
         return len(self._grid)
@@ -84,7 +84,7 @@ class Board(object):
     def check_for_win(self: Self) -> CellState:
         for line in self._map:
             for side in [CellState.X, CellState.O]:
-                if all(cell == CellState.X for cell in line.get(self._grid)):
+                if all(cell == CellState.X for cell in list(map(GridRef.get_lambda(self._grid), line))):
                     return side
         return CellState.EMPTY
 
