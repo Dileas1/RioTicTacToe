@@ -19,7 +19,8 @@ def main():
         print(f"\x1b[{board.size() * 2 - 1}F", end='')
         print(board)
         print('\x1b[0K', end='')
-    print(f"Winner: {board.check_for_win()}")
+    winner = board.check_for_win()
+    print(f"Winner: {winner}" if winner != CellState.EMPTY else "Draw.")
 
 
 if __name__ == "__main__":

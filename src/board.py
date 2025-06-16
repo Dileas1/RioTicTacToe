@@ -5,16 +5,6 @@ import random
 
 T = TypeVar('T')
 
-# Длина ряда крестиков/ноликов для выигрыша
-# в зависимости от размера клетки
-WINNING_LENGTH_PER_GRID_SIZE: dict[int, int] = {
-# Размер клетки: Длина
-    3          : 3,
-    4          : 3,
-    5          : 4,
-    6          : 5
-}
-
 
 class BoardException(Exception):
     pass
@@ -34,6 +24,16 @@ class Board(object):
 # --- Вспомогательные методы --------------
 # /////////////////////////////////////////
 
+    @staticmethod
+    def __get_win_condition(size: int) -> int:
+        if size < 3:
+            return 0
+        if size in [3, 4]:
+            return 3
+        if size == 5:
+            return 4
+        else:
+            return 5
 
     @staticmethod
     def __rotate45(grid: list[list[T]], reverse: bool = False) -> list[list[T]]:
@@ -128,10 +128,10 @@ class Board(object):
 
 
     def __init__(self: Self, size: int) -> None:
-        if size not in [3, 4, 5, 6]:
-            raise BoardException("Size must be from 3 to 6.")
+        if size < 3:
+            raise BoardException("Size must be 3 or larger.")
         self.__grid = [[CellState.EMPTY for _ in range(size)] for _ in range(size)]
-        self.__map = Board.__find_all_lines(Board.__generate_ref_grid(size), WINNING_LENGTH_PER_GRID_SIZE[size])
+        self.__map = Board.__find_all_lines(Board.__generate_ref_grid(size), Board.__get_win_condition(size))
         reflist: list[CellRef] = []
         for row in Board.__generate_ref_grid(size):
             reflist += row
