@@ -11,7 +11,7 @@ def main():
             print(f"\n\x1b[1F", end='')
             move = list(map(int, input().split()))
             print(f"\x1b[1F", end='')
-            if not board.make_a_move(CellRef(move[0], move[1]), CellState.X):
+            if not board.player_move(CellRef(move[0], move[1])):
                 continue
         else:
             board.medium_diff_move()

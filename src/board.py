@@ -21,9 +21,13 @@ class BoardException(Exception):
 
 
 class Board(object):
-    _grid: list[list[CellState]]
-    _map: list[list[CellRef]]
-    _weights: dict[tuple[int, int], int]
+    __grid: list[list[CellState]]
+    __map: list[list[CellRef]]
+    __weights: dict[tuple[int, int], int]
+    __cpu_side: CellState
+
+    def size(self: Self) -> int:
+        return len(self.__grid)
 
 
 # /////////////////////////////////////////
@@ -79,7 +83,7 @@ class Board(object):
         return result
 
     def __ref2state(self: Self, row: list[CellRef]) -> list[CellState]:
-        return list(map(CellRef.get_lambda(self._grid), row))
+        return list(map(CellRef.get_lambda(self.__grid), row))
 
     def __can_complete_line(self: Self, row: list[CellRef], side: CellState) -> bool:
         data = self.__ref2state(row)
@@ -99,17 +103,23 @@ class Board(object):
         return result
 
     def __get_weight(self: Self, ref: CellRef) -> int:
-        return self._weights[ref.to_tuple()]
+        return self.__weights[ref.to_tuple()]
 
-    def __select_best_moves(self: Self, moves: list[CellRef]) -> list[CellRef]:
+    def __select_moves_with_most_value(self: Self, moves: list[CellRef]) -> list[CellRef]:
         weights = list(map(self.__get_weight, moves))
         return [moves[k] for k in [i for i, val in enumerate(weights) if val == max(weights)]]
 
     def __generate_default_movelist(self: Self) -> list[CellRef]:
         return self.__find_empty_cells(Board.__generate_ref_list(self.size()))
 
-    def size(self: Self) -> int:
-        return len(self._grid)
+    def __make_a_move(self: Self, ref: CellRef, side: CellState) -> bool:
+        try:
+            if ref.get(self.__grid) == CellState.EMPTY:
+                ref.set(self.__grid, side)
+                return True
+        except:
+            pass
+        return False
 
 
 # /////////////////////////////////////////
@@ -120,19 +130,20 @@ class Board(object):
     def __init__(self: Self, size: int) -> None:
         if size not in [3, 4, 5, 6]:
             raise BoardException("Size must be from 3 to 6.")
-        self._grid = [[CellState.EMPTY for _ in range(size)] for _ in range(size)]
-        self._map = Board.__find_all_lines(Board.__generate_ref_grid(size), WINNING_LENGTH_PER_GRID_SIZE[size])
+        self.__grid = [[CellState.EMPTY for _ in range(size)] for _ in range(size)]
+        self.__map = Board.__find_all_lines(Board.__generate_ref_grid(size), WINNING_LENGTH_PER_GRID_SIZE[size])
         reflist: list[CellRef] = []
         for row in Board.__generate_ref_grid(size):
             reflist += row
-        self._weights = {}
+        self.__weights = {}
         for ref in reflist:
             count_func: Callable[[list[CellRef]], int] = lambda l: l.count(ref)
-            self._weights[ref.to_tuple()] = sum(list(map(count_func, self._map)))
+            self.__weights[ref.to_tuple()] = sum(list(map(count_func, self.__map)))
+        self.__cpu_side = CellState.O
 
     def __str__(self: Self) -> str:
         result: list[str] = []
-        for row in self._grid:
+        for row in self.__grid:
             result.append(' | '.join(list(map(str, row))))
         return ('\n' + '--+-' * (self.size() - 1) + '-\n').join(result)
 
@@ -142,35 +153,15 @@ class Board(object):
 # /////////////////////////////////////////
 
 
-    def make_a_move(self: Self, ref: CellRef, side: CellState) -> bool:
-        try:
-            if ref.get(self._grid) == CellState.EMPTY:
-                ref.set(self._grid, side)
-                return True
-        except:
-            pass
-        return False
-
-    def is_full(self: Self) -> bool:
-        for row in self._grid:
-            if CellState.EMPTY in row:
-                return False
-        return True
-
-    def check_for_win(self: Self) -> CellState:
-        for row in self._map:
-            for side in [CellState.X, CellState.O]:
-                if all(cell == side for cell in self.__ref2state(row)):
-                    return side
-        return CellState.EMPTY
-
-    def __check_for_immediate_wins(self: Self) -> dict[CellState, list[CellRef]]:
+    def __check_for_immediate_wins(self: Self, pov: CellState = CellState.EMPTY) -> dict[CellState, list[CellRef]]:
+        if pov == CellState.EMPTY:
+            pov = self.__cpu_side
         result: dict[CellState, list[CellRef]] = {
-            CellState.X: [],
-            CellState.O: []
+            pov.opposite(): [],
+            pov: []
         }
-        for row in self._map:
-            for side in [CellState.X, CellState.O]:
+        for row in self.__map:
+            for side in [pov.opposite(), pov]:
                 rowdata = self.__ref2state(row)
                 if rowdata.count(side) == len(row) - 1:
                     try:
@@ -179,14 +170,16 @@ class Board(object):
                         pass
         return result
 
-    def __longest_possible_lines(self: Self, min_len: int = 2) -> dict[CellState, tuple[int, list[CellRef]]]:
+    def __longest_possible_lines(self: Self, pov: CellState = CellState.EMPTY) -> dict[CellState, tuple[int, list[CellRef]]]:
+        if pov == CellState.EMPTY:
+            pov = self.__cpu_side
         result: dict[CellState, tuple[int, list[CellRef]]] = {
-            CellState.X: (0, []),
-            CellState.O: (0, [])
+            pov.opposite(): (0, []),
+            pov: (0, [])
         }
-        for side in [CellState.X, CellState.O]:
-            for row in self._map:
-                for chunk in Board.__split_list(row, max(min_len, result[side][0])):
+        for side in [pov.opposite(), pov]:
+            for row in self.__map:
+                for chunk in Board.__split_list(row, max(2, result[side][0])):
                     if self.__can_complete_line(chunk, side):
                         cells = self.__find_empty_cells(chunk)
                         if len(cells) == 1:
@@ -198,36 +191,69 @@ class Board(object):
 
     # Выбор рандомного легального хода
     # Так будет ходить лёгкий режим сложности
-    def random_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
+    def __random_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
         if movelist is None or len(movelist) == 0:
             movelist = self.__generate_default_movelist()
         return random.choice(movelist)
 
     # Выбор рандомного хода из теоритически лучших позиций
-    def blind_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
+    def __random_best_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
         if movelist is None or len(movelist) == 0:
             movelist = self.__generate_default_movelist()
-        return random.choice(self.__select_best_moves(movelist))
+        return random.choice(self.__select_moves_with_most_value(movelist))
 
     # Выбор лучшего хода исходя из текущего положения игры
     # Так будет ходить средний режим сложности
-    def pick_best_moves(self: Self) -> list[CellRef]:
-        wins = self.__check_for_immediate_wins()
-        for side in [CellState.O, CellState.X]:
+    def __pick_best_moves(self: Self, pov: CellState = CellState.EMPTY) -> list[CellRef]:
+        if pov == CellState.EMPTY:
+            pov = self.__cpu_side
+        wins = self.__check_for_immediate_wins(pov)
+        for side in [pov, pov.opposite()]:
             if len(wins[side]) != 0:
                 return wins[side]
-        lines = self.__longest_possible_lines()
-        if lines[CellState.X][0] == 0 and lines[CellState.O][0] == 0:
+        lines = self.__longest_possible_lines(pov)
+        if lines[pov.opposite()][0] == 0 and lines[pov][0] == 0:
             return []
-        if lines[CellState.X][0] == lines[CellState.O][0]:
-            return lines[CellState.X][1] + lines[CellState.O][1]
-        if lines[CellState.X][0] > lines[CellState.O][0]:
-            return lines[CellState.X][1]
-        return lines[CellState.O][1]
+        if lines[pov.opposite()][0] == lines[pov][0]:
+            return lines[pov.opposite()][1] + lines[pov][1]
+        if lines[pov.opposite()][0] > lines[pov][0]:
+            return lines[pov.opposite()][1]
+        return lines[pov][1]
 
-    def easy_diff_move(self: Self) -> bool:
-        return self.make_a_move(self.random_move(), CellState.O)
 
-    def medium_diff_move(self: Self) -> bool:
-        return self.make_a_move(self.blind_move(self.pick_best_moves()), CellState.O)
+# /////////////////////////////////////////
+# --- Публичные функции  ------------------
+# /////////////////////////////////////////
 
+
+    def pick_cpu_side(self: Self, side: CellState) -> None:
+        if side != CellState.EMPTY:
+            self.__cpu_side = side
+
+    def is_full(self: Self) -> bool:
+            for row in self.__grid:
+                if CellState.EMPTY in row:
+                    return False
+            return True
+
+    def check_for_win(self: Self, pov: CellState = CellState.EMPTY) -> CellState:
+        if pov == CellState.EMPTY:
+            pov = self.__cpu_side
+        for row in self.__map:
+            for side in [pov, pov.opposite()]:
+                if all(cell == side for cell in self.__ref2state(row)):
+                    return side
+        return CellState.EMPTY
+
+    def player_move(self: Self, ref: CellRef) -> bool:
+        return self.__make_a_move(ref, self.__cpu_side.opposite())
+
+    # Низкая сложность ходит по рандому
+    # Средняя выбирает лучший ход из возможных
+    # Высокая просчитывает на несколько ходов вперёд
+
+    def easy_diff_move(self: Self) -> None:
+        self.__make_a_move(self.__random_move(), self.__cpu_side)
+
+    def medium_diff_move(self: Self) -> None:
+        self.__make_a_move(self.__random_best_move(self.__pick_best_moves()), self.__cpu_side)
