@@ -101,9 +101,12 @@ class Board(object):
     def __get_weight(self: Self, ref: CellRef) -> int:
         return self._weights[ref.to_tuple()]
 
-    def __pick_move_w_best_weight(self: Self, moves: list[CellRef]) -> CellRef:
+    def __select_best_moves(self: Self, moves: list[CellRef]) -> list[CellRef]:
         weights = list(map(self.__get_weight, moves))
-        return moves[random.choice([i for i, val in enumerate(weights) if val == max(weights)])]
+        return [moves[k] for k in [i for i, val in enumerate(weights) if val == max(weights)]]
+
+    def __generate_default_movelist(self: Self) -> list[CellRef]:
+        return self.__find_empty_cells(Board.__generate_ref_list(self.size()))
 
     def size(self: Self) -> int:
         return len(self._grid)
@@ -138,6 +141,15 @@ class Board(object):
 # --- Анализ игры  ------------------------
 # /////////////////////////////////////////
 
+
+    def make_a_move(self: Self, ref: CellRef, side: CellState) -> bool:
+        try:
+            if ref.get(self._grid) == CellState.EMPTY:
+                ref.set(self._grid, side)
+                return True
+        except:
+            pass
+        return False
 
     def is_full(self: Self) -> bool:
         for row in self._grid:
@@ -186,12 +198,16 @@ class Board(object):
 
     # Выбор рандомного легального хода
     # Так будет ходить лёгкий режим сложности
-    def random_move(self: Self) -> CellRef:
-        return random.choice(self.__find_empty_cells(Board.__generate_ref_list(self.size())))
+    def random_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
+        if movelist is None:
+            movelist = self.__generate_default_movelist()
+        return random.choice(movelist)
 
     # Выбор рандомного хода из теоритически лучших позиций
-    def blind_move(self: Self) -> CellRef:
-        return self.__pick_move_w_best_weight(self.__find_empty_cells(Board.__generate_ref_list(self.size())))
+    def blind_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
+        if movelist is None:
+            movelist = self.__generate_default_movelist()
+        return random.choice(self.__select_best_moves(movelist))
 
     # Выбор лучшего хода исходя из текущего положения игры
     # Так будет ходить средний режим сложности
@@ -204,8 +220,7 @@ class Board(object):
         if lines[CellState.X][0] == 0 and lines[CellState.O][0] == 0:
             return self.blind_move()
         if lines[CellState.X][0] == lines[CellState.O][0]:
-            return self.__pick_move_w_best_weight(lines[CellState.X][1] + lines[CellState.O][1])
+            return self.blind_move(lines[CellState.X][1] + lines[CellState.O][1])
         if lines[CellState.X][0] > lines[CellState.O][0]:
-            return self.__pick_move_w_best_weight(lines[CellState.X][1])
-        return self.__pick_move_w_best_weight(lines[CellState.O][1])
-
+            return self.blind_move(lines[CellState.X][1])
+        return self.blind_move(lines[CellState.O][1])
