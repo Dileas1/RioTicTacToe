@@ -1,10 +1,17 @@
 from typing import Self, TypeVar
 from collections.abc import Callable
+from enum import StrEnum
 
 T = TypeVar('T')
 
 
-class GridRef(object):
+class CellState(StrEnum):
+    EMPTY = ' '
+    X     = 'X'
+    O     = 'O'
+
+
+class CellRef(object):
     def __init__(self: Self, i: int, j: int) -> None:
         self._i = i
         self._j = j
@@ -17,12 +24,12 @@ class GridRef(object):
 
     @staticmethod
     def get_lambda(grid: list[list[T]]) -> Callable[..., T]:
-        def wrapper(ref: GridRef) -> T:
+        def wrapper(ref: CellRef) -> T:
             return ref.get(grid)
         return wrapper
 
     def __eq__(self: Self, other: object) -> bool:
-        if not isinstance(other, GridRef):
+        if not isinstance(other, CellRef):
             return NotImplemented
         return self._i == other._i and self._j == other._j
 

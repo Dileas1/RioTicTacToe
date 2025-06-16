@@ -1,6 +1,5 @@
 from typing import Self, TypeVar
-from enum import StrEnum
-from .gridref import GridRef
+from .cells import CellRef, CellState
 from collections.abc import Callable
 
 T = TypeVar('T')
@@ -16,19 +15,13 @@ WINNING_LENGTH_PER_GRID_SIZE: dict[int, int] = {
 }
 
 
-class CellState(StrEnum):
-    EMPTY = ' '
-    X     = 'X'
-    O     = 'O'
-
-
 class BoardException(Exception):
     pass
 
 
 class Board(object):
     _grid: list[list[CellState]]
-    _map: list[list[GridRef]]
+    _map: list[list[CellRef]]
     _weights: dict[tuple[int, int], int]
 
     @staticmethod
@@ -60,21 +53,24 @@ class Board(object):
         return result
 
     @staticmethod
-    def __generate_ref_grid(size: int) -> list[list[GridRef]]:
-        return [[GridRef(j, i) for i in range(size)] for j in range(size)]
+    def __generate_ref_grid(size: int) -> list[list[CellRef]]:
+        return [[CellRef(j, i) for i in range(size)] for j in range(size)]
 
     def __init__(self: Self, size: int) -> None:
         if size not in [3, 4, 5, 6]:
             raise BoardException("Size must be from 3 to 6.")
         self._grid = [[CellState.EMPTY for _ in range(size)] for _ in range(size)]
         self._map = Board.find_all_lines(Board.__generate_ref_grid(size), WINNING_LENGTH_PER_GRID_SIZE[size])
-        reflist: list[GridRef] = []
-        for line in Board.__generate_ref_grid(size):
-            reflist += line
+        reflist: list[CellRef] = []
+        for row in Board.__generate_ref_grid(size):
+            reflist += row
         self._weights = {}
         for ref in reflist:
-            count_func: Callable[[list[GridRef]], int] = lambda l: l.count(ref)
+            count_func: Callable[[list[CellRef]], int] = lambda l: l.count(ref)
             self._weights[ref.to_tuple()] = sum(list(map(count_func, self._map)))
+
+    def get_weight(self: Self, ref: CellRef) -> int:
+        return self._weights[ref.to_tuple()]
 
     def size(self: Self) -> int:
         return len(self._grid)
@@ -91,13 +87,27 @@ class Board(object):
                 return False
         return True
 
-    def __gr2cs(self: Self, row: list[GridRef]) -> list[CellState]:
-        return list(map(GridRef.get_lambda(self._grid), row))
+    def __ref2state(self: Self, row: list[CellRef]) -> list[CellState]:
+        return list(map(CellRef.get_lambda(self._grid), row))
 
     def check_for_win(self: Self) -> CellState:
         for row in self._map:
             for side in [CellState.X, CellState.O]:
-                if all(cell == CellState.X for cell in self.__gr2cs(row)):
+                if all(cell == side for cell in self.__ref2state(row)):
                     return side
         return CellState.EMPTY
+
+    def check_for_immediate_wins(self: Self) -> dict[CellState, list[CellRef]]:
+        result: dict[CellState, list[CellRef]] = {
+            CellState.X: [],
+            CellState.O: []
+        }
+        for row in self._map:
+            for side in [CellState.X, CellState.O]:
+                if self.__ref2state(row).count(side) == len(row) - 1:
+                    for ref in row:
+                        if ref.get(self._grid) == CellState.EMPTY:
+                            result[side].append(ref)
+        return result
+
 
