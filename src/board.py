@@ -1,6 +1,7 @@
 from typing import Self, TypeVar
 from .cells import CellRef, CellState
 from collections.abc import Callable
+import random
 
 T = TypeVar('T')
 
@@ -63,6 +64,14 @@ class Board(object):
         return [[CellRef(j, i) for i in range(size)] for j in range(size)]
 
     @staticmethod
+    def __generate_ref_list(size: int) -> list[CellRef]:
+        ref_grid = Board.__generate_ref_grid(size)
+        all_cells: list[CellRef] = []
+        for row in ref_grid:
+            all_cells += row
+        return all_cells
+
+    @staticmethod
     def __split_list(l: list[T], n: int) -> list[list[T]]:
         result: list[list[T]] = []
         for k in range(n, len(l) + 1):
@@ -89,8 +98,12 @@ class Board(object):
         result = [row[i] for i in indices]
         return result
 
-    def _get_weight(self: Self, ref: CellRef) -> int:
+    def __get_weight(self: Self, ref: CellRef) -> int:
         return self._weights[ref.to_tuple()]
+
+    def __pick_move_w_best_weight(self: Self, moves: list[CellRef]) -> CellRef:
+        weights = list(map(self.__get_weight, moves))
+        return moves[random.choice([i for i, val in enumerate(weights) if val == max(weights)])]
 
     def size(self: Self) -> int:
         return len(self._grid)
@@ -139,30 +152,60 @@ class Board(object):
                     return side
         return CellState.EMPTY
 
-    def check_for_immediate_wins(self: Self) -> dict[CellState, list[CellRef]]:
+    def __check_for_immediate_wins(self: Self) -> dict[CellState, list[CellRef]]:
         result: dict[CellState, list[CellRef]] = {
             CellState.X: [],
             CellState.O: []
         }
         for row in self._map:
             for side in [CellState.X, CellState.O]:
-                if self.__ref2state(row).count(side) == len(row) - 1:
-                    for ref in row:
-                        if ref.get(self._grid) == CellState.EMPTY:
-                            result[side].append(ref)
+                rowdata = self.__ref2state(row)
+                if rowdata.count(side) == len(row) - 1:
+                    try:
+                        result[side].append(row[rowdata.index(CellState.EMPTY)])
+                    except:
+                        pass
         return result
 
-    def longest_possible_lines(self: Self) -> dict[CellState, tuple[int, CellRef | None]]:
-        result: dict[CellState, tuple[int, CellRef | None]] = {
-            CellState.X: (0, None),
-            CellState.O: (0, None)
+    def __longest_possible_lines(self: Self, min_len: int = 2) -> dict[CellState, tuple[int, list[CellRef]]]:
+        result: dict[CellState, tuple[int, list[CellRef]]] = {
+            CellState.X: (0, []),
+            CellState.O: (0, [])
         }
         for side in [CellState.X, CellState.O]:
             for row in self._map:
-                for chunk in Board.__split_list(row, max(2, result[side][0])):
+                for chunk in Board.__split_list(row, max(min_len, result[side][0] + 1)):
                     if self.__can_complete_line(chunk, side):
                         cells = self.__find_empty_cells(chunk)
                         if len(cells) == 1:
-                            result[side] = (len(chunk), cells[0])
-
+                            if len(chunk) == result[side][0]:
+                                result[side][1].append(cells[0])
+                            elif len(chunk) > result[side][0]:
+                                result[side] = (len(chunk), [cells[0]])
         return result
+
+    # Выбор рандомного легального хода
+    # Так будет ходить лёгкий режим сложности
+    def random_move(self: Self) -> CellRef:
+        return random.choice(self.__find_empty_cells(Board.__generate_ref_list(self.size())))
+
+    # Выбор рандомного хода из теоритически лучших позиций
+    def blind_move(self: Self) -> CellRef:
+        return self.__pick_move_w_best_weight(self.__find_empty_cells(Board.__generate_ref_list(self.size())))
+
+    # Выбор лучшего хода исходя из текущего положения игры
+    # Так будет ходить средний режим сложности
+    def pick_best_move(self: Self) -> CellRef:
+        wins = self.__check_for_immediate_wins()
+        for side in [CellState.O, CellState.X]:
+            if len(wins[side]) != 0:
+                return random.choice(wins[side])
+        lines = self.__longest_possible_lines()
+        if lines[CellState.X][0] == 0 and lines[CellState.O][0] == 0:
+            return self.blind_move()
+        if lines[CellState.X][0] == lines[CellState.O][0]:
+            return self.__pick_move_w_best_weight(lines[CellState.X][1] + lines[CellState.O][1])
+        if lines[CellState.X][0] > lines[CellState.O][0]:
+            return self.__pick_move_w_best_weight(lines[CellState.X][1])
+        return self.__pick_move_w_best_weight(lines[CellState.O][1])
+
