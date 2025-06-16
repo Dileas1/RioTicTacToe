@@ -3,8 +3,7 @@ from src import *
 
 
 def main():
-    b = Board(3)
-    print(b.check_for_win())
+    pass
 
 
 if __name__ == "__main__":

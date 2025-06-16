@@ -62,11 +62,38 @@ class Board(object):
     def __generate_ref_grid(size: int) -> list[list[CellRef]]:
         return [[CellRef(j, i) for i in range(size)] for j in range(size)]
 
+    @staticmethod
+    def __split_list(l: list[T], n: int) -> list[list[T]]:
+        result: list[list[T]] = []
+        for k in range(n, len(l) + 1):
+            result += [l[i:i+k] for i in range(len(l)-k+1)]
+        return result
+
     def __ref2state(self: Self, row: list[CellRef]) -> list[CellState]:
         return list(map(CellRef.get_lambda(self._grid), row))
 
+    def __can_complete_line(self: Self, row: list[CellRef], side: CellState) -> bool:
+        data = self.__ref2state(row)
+        return all([
+            data.count(side) == len(data) - 1,
+            data.count(side.opposite()) == 0,
+            data.count(CellState.EMPTY) == 1
+        ])
+
+    def __find_empty_cells(self: Self, row: list[CellRef]) -> list[CellRef]:
+        data = self.__ref2state(row)
+        indices: list[int] = []
+        for i in range(len(data)):
+            if data[i] == CellState.EMPTY:
+                indices.append(i)
+        result = [row[i] for i in indices]
+        return result
+
     def _get_weight(self: Self, ref: CellRef) -> int:
         return self._weights[ref.to_tuple()]
+
+    def size(self: Self) -> int:
+        return len(self._grid)
 
 
 # /////////////////////////////////////////
@@ -92,9 +119,6 @@ class Board(object):
         for row in self._grid:
             result.append(' | '.join(list(map(str, row))))
         return ('\n' + '--+-' * (self.size() - 1) + '-\n').join(result)
-
-    def size(self: Self) -> int:
-        return len(self._grid)
 
 
 # /////////////////////////////////////////
@@ -128,3 +152,17 @@ class Board(object):
                             result[side].append(ref)
         return result
 
+    def longest_possible_lines(self: Self) -> dict[CellState, tuple[int, CellRef | None]]:
+        result: dict[CellState, tuple[int, CellRef | None]] = {
+            CellState.X: (0, None),
+            CellState.O: (0, None)
+        }
+        for side in [CellState.X, CellState.O]:
+            for row in self._map:
+                for chunk in Board.__split_list(row, max(2, result[side][0])):
+                    if self.__can_complete_line(chunk, side):
+                        cells = self.__find_empty_cells(chunk)
+                        if len(cells) == 1:
+                            result[side] = (len(chunk), cells[0])
+
+        return result

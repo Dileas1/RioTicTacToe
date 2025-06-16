@@ -9,6 +9,13 @@ class CellState(StrEnum):
     EMPTY = ' '
     X     = 'X'
     O     = 'O'
+    def opposite(self: Self):
+        if self == CellState.EMPTY:
+            return CellState.EMPTY
+        if self == CellState.X:
+            return CellState.O
+        if self == CellState.O:
+            return CellState.X
 
 
 class CellRef(object):
