@@ -1,6 +1,7 @@
 from typing import Self, TypeVar
 from enum import StrEnum
 from .gridref import GridRef
+from collections.abc import Callable
 
 T = TypeVar('T')
 
@@ -28,6 +29,7 @@ class BoardException(Exception):
 class Board(object):
     _grid: list[list[CellState]]
     _map: list[list[GridRef]]
+    _weights: dict[tuple[int, int], int]
 
     @staticmethod
     def rotate45(grid: list[list[T]], reverse: bool = False) -> list[list[T]]:
@@ -57,14 +59,22 @@ class Board(object):
             result += [row[i:i+length] for i in range(len(row) - length + 1)]
         return result
 
+    @staticmethod
+    def __generate_ref_grid(size: int) -> list[list[GridRef]]:
+        return [[GridRef(j, i) for i in range(size)] for j in range(size)]
+
     def __init__(self: Self, size: int) -> None:
         if size not in [3, 4, 5, 6]:
             raise BoardException("Size must be from 3 to 6.")
         self._grid = [[CellState.EMPTY for _ in range(size)] for _ in range(size)]
-        self._map = Board.find_all_lines(
-            [[GridRef(j, i) for i in range(size)] for j in range(size)],
-            WINNING_LENGTH_PER_GRID_SIZE[size]
-        )
+        self._map = Board.find_all_lines(Board.__generate_ref_grid(size), WINNING_LENGTH_PER_GRID_SIZE[size])
+        reflist: list[GridRef] = []
+        for line in Board.__generate_ref_grid(size):
+            reflist += line
+        self._weights = {}
+        for ref in reflist:
+            count_func: Callable[[list[GridRef]], int] = lambda l: l.count(ref)
+            self._weights[ref.to_tuple()] = sum(list(map(count_func, self._map)))
 
     def size(self: Self) -> int:
         return len(self._grid)

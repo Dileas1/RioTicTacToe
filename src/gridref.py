@@ -20,3 +20,11 @@ class GridRef(object):
         def wrapper(ref: GridRef) -> T:
             return ref.get(grid)
         return wrapper
+
+    def __eq__(self: Self, other: object) -> bool:
+        if not isinstance(other, GridRef):
+            return NotImplemented
+        return self._i == other._i and self._j == other._j
+
+    def to_tuple(self: Self) -> tuple[int, int]:
+        return (self._i, self._j)
