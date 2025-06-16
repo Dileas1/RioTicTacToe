@@ -42,3 +42,6 @@ class CellRef(object):
 
     def to_tuple(self: Self) -> tuple[int, int]:
         return (self._i, self._j)
+
+    def __repr__(self: Self) -> str:
+        return str(self.to_tuple())

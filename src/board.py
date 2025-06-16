@@ -186,7 +186,7 @@ class Board(object):
         }
         for side in [CellState.X, CellState.O]:
             for row in self._map:
-                for chunk in Board.__split_list(row, max(min_len, result[side][0] + 1)):
+                for chunk in Board.__split_list(row, max(min_len, result[side][0])):
                     if self.__can_complete_line(chunk, side):
                         cells = self.__find_empty_cells(chunk)
                         if len(cells) == 1:
@@ -199,28 +199,35 @@ class Board(object):
     # Выбор рандомного легального хода
     # Так будет ходить лёгкий режим сложности
     def random_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
-        if movelist is None:
+        if movelist is None or len(movelist) == 0:
             movelist = self.__generate_default_movelist()
         return random.choice(movelist)
 
     # Выбор рандомного хода из теоритически лучших позиций
     def blind_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
-        if movelist is None:
+        if movelist is None or len(movelist) == 0:
             movelist = self.__generate_default_movelist()
         return random.choice(self.__select_best_moves(movelist))
 
     # Выбор лучшего хода исходя из текущего положения игры
     # Так будет ходить средний режим сложности
-    def pick_best_move(self: Self) -> CellRef:
+    def pick_best_moves(self: Self) -> list[CellRef]:
         wins = self.__check_for_immediate_wins()
         for side in [CellState.O, CellState.X]:
             if len(wins[side]) != 0:
-                return random.choice(wins[side])
+                return wins[side]
         lines = self.__longest_possible_lines()
         if lines[CellState.X][0] == 0 and lines[CellState.O][0] == 0:
-            return self.blind_move()
+            return []
         if lines[CellState.X][0] == lines[CellState.O][0]:
-            return self.blind_move(lines[CellState.X][1] + lines[CellState.O][1])
+            return lines[CellState.X][1] + lines[CellState.O][1]
         if lines[CellState.X][0] > lines[CellState.O][0]:
-            return self.blind_move(lines[CellState.X][1])
-        return self.blind_move(lines[CellState.O][1])
+            return lines[CellState.X][1]
+        return lines[CellState.O][1]
+
+    def easy_diff_move(self: Self) -> bool:
+        return self.make_a_move(self.random_move(), CellState.O)
+
+    def medium_diff_move(self: Self) -> bool:
+        return self.make_a_move(self.blind_move(self.pick_best_moves()), CellState.O)
+
