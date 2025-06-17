@@ -324,9 +324,11 @@ class Board(object):
 
     def hard_diff_move(self: Self) -> CellRef:
         depth = 3
-        match self.size():
-            case 3: depth = 9
-            case 4: depth = 5
-            case 5: depth = 4
-            case _: pass
+        size = self.size()
+        if size == 3:  # match case юзать опасно, оно только в 3.10 появилось
+            depth = 9  # хрен знает, на какой древней версии это запустят
+        if size == 4:
+            depth = 5
+        if size == 5:
+            depth = 4
         return self.__best_value_move(self.__gigabrain(depth))
