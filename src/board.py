@@ -1,7 +1,7 @@
 from typing import Self, TypeVar
-from .cells import CellRef, CellState
-from collections.abc import Callable
+from .cells import CellRef, CellState, CellWeightMap
 import random
+import copy
 
 T = TypeVar('T')
 
@@ -10,10 +10,12 @@ class BoardException(Exception):
     pass
 
 
+__weight_map = CellWeightMap()
+
+
 class Board(object):
     __grid: list[list[CellState]]
     __map: list[list[CellRef]]
-    __weights: dict[tuple[int, int], int]
     __cpu_side: CellState
 
     def size(self: Self) -> int:
@@ -34,46 +36,6 @@ class Board(object):
             return 4
         else:
             return 5
-
-    @staticmethod
-    def __rotate45(grid: list[list[T]], reverse: bool = False) -> list[list[T]]:
-        n = len(grid)
-        result: list[list[T]] = [[] for _ in range(2 * n - 1)]
-        for i in range(n):
-            for j in range(n):
-                if reverse:
-                    result[i - j].append(grid[i][j])
-                else:
-                    result[i + j].append(grid[i][j])
-        return result
-
-    @staticmethod
-    def __rotate90(grid: list[list[T]]) -> list[list[T]]:
-        n = len(grid)
-        return [[grid[i][j] for i in range(n)] for j in range(n)]
-
-    @staticmethod
-    def __find_all_lines(grid: list[list[T]], length: int) -> list[list[T]]:
-        all_rows = [*grid, *Board.__rotate45(grid), *Board.__rotate90(grid), *Board.__rotate45(grid, reverse=True)]
-        for i in range(len(all_rows) - 1, -1, -1):
-            if len(all_rows[i]) < length:
-                all_rows.pop(i)
-        result: list[list[T]] = []
-        for row in all_rows:
-            result += [row[i:i+length] for i in range(len(row) - length + 1)]
-        return result
-
-    @staticmethod
-    def __generate_ref_grid(size: int) -> list[list[CellRef]]:
-        return [[CellRef(j, i) for i in range(size)] for j in range(size)]
-
-    @staticmethod
-    def __generate_ref_list(size: int) -> list[CellRef]:
-        ref_grid = Board.__generate_ref_grid(size)
-        all_cells: list[CellRef] = []
-        for row in ref_grid:
-            all_cells += row
-        return all_cells
 
     @staticmethod
     def __split_list(l: list[T], n: int) -> list[list[T]]:
@@ -103,10 +65,11 @@ class Board(object):
         return result
 
     def __get_weight(self: Self, ref: CellRef) -> int:
-        return self.__weights[ref.to_tuple()]
+        global __weight_map
+        return __weight_map[ref]
 
     def __get_all_legal_moves(self: Self) -> list[CellRef]:
-        return self.__find_empty_cells(Board.__generate_ref_list(self.size()))
+        return self.__find_empty_cells(CellRef.generate_list(self.size()))
 
     def __make_a_move(self: Self, ref: CellRef, side: CellState) -> bool:
         try:
@@ -117,7 +80,6 @@ class Board(object):
             pass
         return False
 
-
 # /////////////////////////////////////////
 # --- Встроенные методы -------------------
 # /////////////////////////////////////////
@@ -126,15 +88,11 @@ class Board(object):
     def __init__(self: Self, size: int) -> None:
         if size < 3:
             raise BoardException("Size must be 3 or larger.")
+        win_condition = Board.__get_win_condition(size)
         self.__grid = [[CellState.EMPTY for _ in range(size)] for _ in range(size)]
-        self.__map = Board.__find_all_lines(Board.__generate_ref_grid(size), Board.__get_win_condition(size))
-        reflist: list[CellRef] = []
-        for row in Board.__generate_ref_grid(size):
-            reflist += row
-        self.__weights = {}
-        for ref in reflist:
-            count_func: Callable[[list[CellRef]], int] = lambda l: l.count(ref)
-            self.__weights[ref.to_tuple()] = sum(list(map(count_func, self.__map)))
+        self.__map = CellRef.map_out_all_wins(size, win_condition)
+        global __weight_map
+        __weight_map = CellWeightMap(size, win_condition)
         self.__cpu_side = CellState.O
 
     def __str__(self: Self) -> str:
@@ -231,7 +189,7 @@ class Board(object):
             return lines[pov.opposite()][1]
         return lines[pov][1]
 
-    def __pick_best_moves(self: Self, go_easy: bool = False, pov: CellState = CellState.EMPTY) -> list[CellRef]:
+    def __pick_best_moves(self: Self, pov: CellState = CellState.EMPTY, go_easy: bool = False) -> list[CellRef]:
         if pov == CellState.EMPTY:
             pov = self.__cpu_side
         wins = self.__detect_wins(pov)
@@ -241,6 +199,82 @@ class Board(object):
         if (random.choice([True, False]) if go_easy else True) :
             return decisions
         return []
+
+    def __simulate_move(self: Self, side: CellState, move: CellRef) -> Self:
+        board = copy.deepcopy(self)
+        board.__make_a_move(move, side)
+        return board
+
+    def __calculate_ahead(self: Self, turns: int, board: Self | None = None, pov: CellState = CellState.EMPTY) -> dict[CellRef, object | CellState | None] | None:
+        if pov == CellState.EMPTY:
+            pov = self.__cpu_side
+        if turns <= 0:
+            return None
+        if board is None:
+            board = copy.deepcopy(self)
+        moveset = board.__pick_best_moves(pov)
+        result: dict[CellRef, object | CellState] = {}
+        for move in moveset:
+            outcome = board.__simulate_move(pov, move)
+            has_anyone_won = outcome.check_for_win()
+            if has_anyone_won != CellState.EMPTY:
+                result[move] = has_anyone_won
+            elif outcome.is_full():
+                result[move] = self.__cpu_side.opposite()
+            else:
+                result[move] = (
+                    self.__get_weight(move),
+                    self.__calculate_ahead(turns - 1, outcome, pov.opposite())
+                )
+        return result
+
+    def __assess_predictions(self: Self, predictions: dict[CellRef, object | CellState | None] | None) -> dict[CellRef, dict[str, int]] | None:
+        if predictions is None:
+            return None
+        result: dict[CellRef, dict[str, int]] = {}
+        for move in predictions:
+            prediction = predictions[move]
+            if prediction is None:
+                continue
+            if move not in result:
+                result[move] = {
+                    "wins": 0,
+                    "total_value": self.__get_weight(move)
+                }
+            if isinstance(prediction, CellState):
+                if prediction == self.__cpu_side:
+                    result[move]["wins"] += 1
+                else:
+                    result[move]["wins"] -= 1
+            if isinstance(prediction, dict):
+                look_forward = self.__assess_predictions(prediction) # type: ignore
+                if look_forward is not None:
+                    for move2 in look_forward:
+                        result[move]["wins"] += look_forward[move2]["wins"]
+                        result[move]["total_value"] += look_forward[move2]["total_value"]
+        return result
+
+    def __gigabrain(self: Self, turns: int) -> list[CellRef]:
+        simulation_results = self.__assess_predictions(self.__calculate_ahead(turns))
+        if simulation_results is None:
+            return []
+        best_moves: list[tuple[CellRef, int, int]] = []
+        for move in simulation_results:
+            raw = simulation_results[move]
+            outcome = (move, raw["wins"], raw["total_value"])
+            if len(best_moves) == 0:
+                best_moves.append(outcome)
+            for best_move in best_moves:
+                if (outcome[1] > best_move[1]) or (outcome[1] == best_move[1] and outcome[2] > best_move[2]):
+                    best_moves = [outcome]
+                    break
+                if outcome[1] == best_move[1] and outcome[2] == best_move[2]:
+                    best_moves.append(outcome)
+                    break
+        result: list[CellRef] = []
+        for best_move in best_moves:
+            result.append(best_move[0])
+        return result
 
 
 # /////////////////////////////////////////
@@ -258,11 +292,9 @@ class Board(object):
                     return False
             return True
 
-    def check_for_win(self: Self, pov: CellState = CellState.EMPTY) -> CellState:
-        if pov == CellState.EMPTY:
-            pov = self.__cpu_side
+    def check_for_win(self: Self) -> CellState:
         for row in self.__map:
-            for side in [pov, pov.opposite()]:
+            for side in [self.__cpu_side, self.__cpu_side.opposite()]:
                 if all(cell == side for cell in self.__ref2state(row)):
                     return side
         return CellState.EMPTY
@@ -278,14 +310,23 @@ class Board(object):
 # --- Ходы ИИ в зависимости от сложности  -
 # /////////////////////////////////////////
 
+    # "Мастер ничей" - почти невозможно обыграть, я пробовал
+    def drawmaster_diff_move(self: Self) -> CellRef:
+        return self.__best_value_move(self.__pick_best_moves())
 
-    # Лёгкая сложность - просто рандомные ходы
+    # Лёгкая сложность - по большей части рандомные ходы
     def easy_diff_move(self: Self) -> CellRef:
         return self.__hesitant_move()
 
+    # Средняя сложность - как "мастер ничей", только поддаётся в 50% случаев
     def medium_diff_move(self: Self) -> CellRef:
-        return self.__hesitant_move(self.__pick_best_moves(True))
+        return self.__hesitant_move(self.__pick_best_moves(go_easy=True))
 
-    # "Мастер ничей"
-    def drawmaster_diff_move(self: Self) -> CellRef:
-        return self.__best_value_move(self.__pick_best_moves())
+    def hard_diff_move(self: Self) -> CellRef:
+        depth = 3
+        match self.size():
+            case 3: depth = 9
+            case 4: depth = 5
+            case 5: depth = 4
+            case _: pass
+        return self.__best_value_move(self.__gigabrain(depth))

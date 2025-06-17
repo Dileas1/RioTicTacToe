@@ -14,7 +14,7 @@ def main():
             if not board.player_move(CellRef(move[0], move[1])):
                 continue
         else:
-            board.cpu_move(board.easy_diff_move())
+            board.cpu_move(board.hard_diff_move())
         players_turn = not players_turn
         print(f"\x1b[{board.size() * 2 - 1}F", end='')
         print(board)
