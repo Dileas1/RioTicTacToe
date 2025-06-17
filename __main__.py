@@ -3,7 +3,7 @@ from src import *
 
 
 def main():
-    board = Board(3)
+    board = Board(5)
     players_turn = True
     print(board)
     while (not board.is_full()) and (board.check_for_win() == CellState.EMPTY):

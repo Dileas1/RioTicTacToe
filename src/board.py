@@ -205,7 +205,7 @@ class Board(object):
         board.__make_a_move(move, side)
         return board
 
-    def __calculate_ahead(self: Self, turns: int, board: Self | None = None, pov: CellState = CellState.EMPTY) -> dict[CellRef, object | CellState | None] | None:
+    def __calculate_ahead(self: Self, turns: int, board: Self | None = None, pov: CellState = CellState.EMPTY) -> dict[CellRef, tuple[object | CellState, CellState] | None] | None:
         if pov == CellState.EMPTY:
             pov = self.__cpu_side
         if turns <= 0:
@@ -213,33 +213,35 @@ class Board(object):
         if board is None:
             board = copy.deepcopy(self)
         moveset = board.__pick_best_moves(pov)
-        result: dict[CellRef, object | CellState] = {}
+        result: dict[CellRef, tuple[object | CellState, CellState] | None] = {}
         for move in moveset:
             outcome = board.__simulate_move(pov, move)
             has_anyone_won = outcome.check_for_win()
             if has_anyone_won != CellState.EMPTY:
-                result[move] = has_anyone_won
+                result[move] = (has_anyone_won, pov)
             elif outcome.is_full():
-                result[move] = self.__cpu_side.opposite()
+                result[move] = (self.__cpu_side.opposite(), pov)
             else:
-                result[move] = (
+                result[move] = ((
                     self.__get_weight(move),
                     self.__calculate_ahead(turns - 1, outcome, pov.opposite())
-                )
+                ), pov)
         return result
 
-    def __assess_predictions(self: Self, predictions: dict[CellRef, object | CellState | None] | None) -> dict[CellRef, dict[str, int]] | None:
+    def __assess_predictions(self: Self, predictions: dict[CellRef, tuple[object | CellState, CellState] | None] | None) -> dict[CellRef, dict[str, int]] | None:
         if predictions is None:
             return None
         result: dict[CellRef, dict[str, int]] = {}
         for move in predictions:
-            prediction = predictions[move]
-            if prediction is None:
+            if predictions[move] is None:
                 continue
+            data = predictions[move]
+            prediction = data[0] # type: ignore
+            side = data[1]       # type: ignore
             if move not in result:
                 result[move] = {
                     "wins": 0,
-                    "total_value": self.__get_weight(move)
+                    "total_value": self.__get_weight(move) if side == self.__cpu_side else 0
                 }
             if isinstance(prediction, CellState):
                 if prediction == self.__cpu_side:
@@ -326,7 +328,7 @@ class Board(object):
         depth = 3
         size = self.size()
         if size == 3:  # match case юзать опасно, оно только в 3.10 появилось
-            depth = 9  # хрен знает, на какой древней версии это запустят
+            depth = 8  # хрен знает, на какой древней версии это запустят
         if size == 4:
             depth = 5
         if size == 5:
