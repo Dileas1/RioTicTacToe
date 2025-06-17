@@ -1,8 +1,6 @@
-from typing import Self, TypeVar
+from typing import Self
 from collections.abc import Callable
 from enum import StrEnum
-
-T = TypeVar('T')
 
 
 class CellState(StrEnum):
@@ -23,15 +21,15 @@ class CellRef(object):
         self._i = i
         self._j = j
 
-    def get(self: Self, grid: list[list[T]]) -> T:
+    def get(self: Self, grid: list[list[CellState]]) -> CellState:
         return grid[self._i][self._j]
 
-    def set(self: Self, grid: list[list[T]], val: T) -> None:
+    def set(self: Self, grid: list[list[CellState]], val: CellState) -> None:
         grid[self._i][self._j] = val
 
     @staticmethod
-    def get_lambda(grid: list[list[T]]) -> Callable[..., T]:
-        def wrapper(ref: CellRef) -> T:
+    def get_lambda(grid: list[list[CellState]]) -> Callable[..., CellState]:
+        def wrapper(ref: CellRef) -> CellState:
             return ref.get(grid)
         return wrapper
 

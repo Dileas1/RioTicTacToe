@@ -105,11 +105,7 @@ class Board(object):
     def __get_weight(self: Self, ref: CellRef) -> int:
         return self.__weights[ref.to_tuple()]
 
-    def __select_moves_with_most_value(self: Self, moves: list[CellRef]) -> list[CellRef]:
-        weights = list(map(self.__get_weight, moves))
-        return [moves[k] for k in [i for i, val in enumerate(weights) if val == max(weights)]]
-
-    def __generate_default_movelist(self: Self) -> list[CellRef]:
+    def __get_all_legal_moves(self: Self) -> list[CellRef]:
         return self.__find_empty_cells(Board.__generate_ref_list(self.size()))
 
     def __make_a_move(self: Self, ref: CellRef, side: CellState) -> bool:
@@ -153,7 +149,7 @@ class Board(object):
 # /////////////////////////////////////////
 
 
-    def __check_for_immediate_wins(self: Self, pov: CellState = CellState.EMPTY) -> dict[CellState, list[CellRef]]:
+    def __immediate_wins(self: Self, pov: CellState = CellState.EMPTY) -> dict[CellState, list[CellRef]]:
         if pov == CellState.EMPTY:
             pov = self.__cpu_side
         result: dict[CellState, list[CellRef]] = {
@@ -189,28 +185,43 @@ class Board(object):
                                 result[side] = (len(chunk), [cells[0]])
         return result
 
-    # Выбор рандомного легального хода
-    # Так будет ходить лёгкий режим сложности
-    def __random_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
-        if movelist is None or len(movelist) == 0:
-            movelist = self.__generate_default_movelist()
+
+# /////////////////////////////////////////
+# --- Функции рандомного выбора хода  -----
+# /////////////////////////////////////////
+
+
+    # Абсолютно рандомный ход
+    def __random_move(self: Self, movelist: list[CellRef] = []) -> CellRef:
+        if len(movelist) == 0:
+            movelist = self.__get_all_legal_moves()
         return random.choice(movelist)
 
-    # Выбор рандомного хода из теоритически лучших позиций
-    def __random_best_move(self: Self, movelist: list[CellRef] | None = None) -> CellRef:
-        if movelist is None or len(movelist) == 0:
-            movelist = self.__generate_default_movelist()
-        return random.choice(self.__select_moves_with_most_value(movelist))
+    # Рандомный из самых выгодных
+    def __best_value_move(self: Self, movelist: list[CellRef] = []) -> CellRef:
+        if len(movelist) == 0:
+            movelist = self.__get_all_legal_moves()
+        weights = list(map(self.__get_weight, movelist))
+        return random.choice([movelist[k] for k in [i for i, val in enumerate(weights) if val == max(weights)]])
 
-    # Выбор лучшего хода исходя из текущего положения игры
-    # Так будет ходить средний режим сложности
-    def __pick_best_moves(self: Self, pov: CellState = CellState.EMPTY) -> list[CellRef]:
-        if pov == CellState.EMPTY:
-            pov = self.__cpu_side
-        wins = self.__check_for_immediate_wins(pov)
+    # Что-то среднее
+    def __hesitant_move(self: Self, movelist: list[CellRef] = []) -> CellRef:
+        return random.choice([self.__random_move, self.__best_value_move])(movelist)
+
+
+# /////////////////////////////////////////
+# --- Функции выбора стратегии  -----------
+# /////////////////////////////////////////
+
+
+    def __detect_wins(self: Self, pov: CellState = CellState.EMPTY) -> list[CellRef]:
+        wins = self.__immediate_wins(pov)
         for side in [pov, pov.opposite()]:
             if len(wins[side]) != 0:
                 return wins[side]
+        return []
+
+    def __block_or_push(self: Self, pov: CellState = CellState.EMPTY) -> list[CellRef]:
         lines = self.__longest_possible_lines(pov)
         if lines[pov.opposite()][0] == 0 and lines[pov][0] == 0:
             return []
@@ -219,6 +230,17 @@ class Board(object):
         if lines[pov.opposite()][0] > lines[pov][0]:
             return lines[pov.opposite()][1]
         return lines[pov][1]
+
+    def __pick_best_moves(self: Self, go_easy: bool = False, pov: CellState = CellState.EMPTY) -> list[CellRef]:
+        if pov == CellState.EMPTY:
+            pov = self.__cpu_side
+        wins = self.__detect_wins(pov)
+        if (random.choice([True, False]) if go_easy else True) and (len(wins) != 0):
+            return wins
+        decisions = self.__block_or_push(pov)
+        if (random.choice([True, False]) if go_easy else True) :
+            return decisions
+        return []
 
 
 # /////////////////////////////////////////
@@ -245,15 +267,25 @@ class Board(object):
                     return side
         return CellState.EMPTY
 
-    def player_move(self: Self, ref: CellRef) -> bool:
-        return self.__make_a_move(ref, self.__cpu_side.opposite())
+    def player_move(self: Self, move: CellRef) -> bool:
+        return self.__make_a_move(move, self.__cpu_side.opposite())
 
-    # Низкая сложность ходит по рандому
-    # Средняя выбирает лучший ход из возможных
-    # Высокая просчитывает на несколько ходов вперёд
+    def cpu_move(self: Self, move: CellRef) -> bool:
+        return self.__make_a_move(move, self.__cpu_side)
 
-    def easy_diff_move(self: Self) -> None:
-        self.__make_a_move(self.__random_move(), self.__cpu_side)
 
-    def medium_diff_move(self: Self) -> None:
-        self.__make_a_move(self.__random_best_move(self.__pick_best_moves()), self.__cpu_side)
+# /////////////////////////////////////////
+# --- Ходы ИИ в зависимости от сложности  -
+# /////////////////////////////////////////
+
+
+    # Лёгкая сложность - просто рандомные ходы
+    def easy_diff_move(self: Self) -> CellRef:
+        return self.__hesitant_move()
+
+    def medium_diff_move(self: Self) -> CellRef:
+        return self.__hesitant_move(self.__pick_best_moves(True))
+
+    # "Мастер ничей"
+    def drawmaster_diff_move(self: Self) -> CellRef:
+        return self.__best_value_move(self.__pick_best_moves())
