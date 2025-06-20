@@ -111,12 +111,15 @@ class MainPage(rio.Component):
                 text = "It's a draw."
             else:
                 text = "You lose."
-        if self._turn == CellState.O:
-            text = "Thinking..."
+        lower_status = rio.Text(text, align_x=0.5) if self._winner is not None or self._turn == CellState.X else rio.Row(
+            rio.ProgressCircle(align_x=0.5),
+            rio.Text("Thinking..."),
+            align_x=0.5, align_y=0.5
+        )
         return rio.Column(
             rio.Text(f"Connect {Board.get_win_condition(self._size)} to win!", align_x=0.5),
             grid,
-            rio.Text(text, align_x=0.5),
+            lower_status,
             rio.Button(
                 "Return",
                 icon="material/arrow_back",
