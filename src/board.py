@@ -114,7 +114,7 @@ class Board(object):
 # /////////////////////////////////////////
 
 
-    def __check_for_win(self: Self) -> CellState:
+    def __cfw_internal(self: Self) -> CellState:
         for row in self.__map:
             for side in [self.__cpu_side, self.__cpu_side.opposite()]:
                 if all(cell == side for cell in self.__ref2state(row)):
@@ -186,7 +186,7 @@ class Board(object):
 # /////////////////////////////////////////
 
 
-    def __detect_wins(self: Self, pov: CellState = CellState.EMPTY) -> list[CellRef]:
+    def __dw_internal(self: Self, pov: CellState = CellState.EMPTY) -> list[CellRef]:
         wins = self.__immediate_wins(pov)
         for side in [pov, pov.opposite()]:
             if len(wins[side]) != 0:
@@ -206,7 +206,7 @@ class Board(object):
     def __pick_best_moves(self: Self, pov: CellState = CellState.EMPTY, go_easy: bool = False) -> list[CellRef]:
         if pov == CellState.EMPTY:
             pov = self.__cpu_side
-        wins = self.__detect_wins(pov)
+        wins = self.__dw_internal(pov)
         if (random.choice([True, False]) if go_easy else True) and (len(wins) != 0):
             return wins
         decisions = self.__block_or_push(pov)
@@ -230,7 +230,7 @@ class Board(object):
         result: dict[CellRef, tuple[object | CellState, CellState] | None] = {}
         for move in moveset:
             outcome = board.__simulate_move(pov, move)
-            has_anyone_won = outcome.__check_for_win()
+            has_anyone_won = outcome.__cfw_internal()
             if has_anyone_won != CellState.EMPTY:
                 result[move] = (has_anyone_won, pov)
             elif outcome.is_full():
@@ -308,10 +308,17 @@ class Board(object):
         return self.__make_a_move(move, self.__cpu_side.opposite())
 
     def detect_wins_or_draws(self: Self) -> CellState | None:
-        side = self.__check_for_win()
+        side = self.__cfw_internal()
         if (not self.is_full()) and side == CellState.EMPTY:
             return None
         return side
+
+    def explain_win(self: Self) -> list[CellRef] | None:
+        for row in self.__map:
+            for side in [self.__cpu_side, self.__cpu_side.opposite()]:
+                if all(cell == side for cell in self.__ref2state(row)):
+                    return row
+        return None
 
 
 # /////////////////////////////////////////

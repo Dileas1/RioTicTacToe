@@ -3,7 +3,7 @@ from ..board import Diff, Board
 from ..cells import CellRef, CellState
 from enum import StrEnum
 from threading import Lock
-from .. import components as comps
+from .cell import Cell
 import rio
 import functools
 
@@ -15,26 +15,17 @@ class Theme(StrEnum):
         if self == Theme.LIGHT:
             return Theme.DARK
         return Theme.LIGHT
-    def get_settings(self: Self) -> rio.Theme:
-        return rio.Theme.from_colors(
-            primary_color=rio.Color.from_hex("01dffdff"),
-            secondary_color=rio.Color.from_hex("0083ffff"),
-            mode=self.value
-        )
 
 
-@rio.page(
-    name="Tic Tac Toe",
-    url_segment=""
-)
+
 class MainPage(rio.Component):
     _diff: Diff = Diff.EASY
     _size: int = 3
-    _theme: Theme = Theme.DARK
     _start: bool = False
     _board: Board | None = None
     _winner: CellState | None = None
     _thinking: bool = False
+    _theme: Theme = Theme.DARK
 
     def get_board(self: Self) -> Board:
         if self._board is None:
@@ -46,18 +37,12 @@ class MainPage(rio.Component):
         self._winner = None
         self._start = False
 
-    def switch_theme(self: Self) -> None:
-        self._theme = self._theme.opposite()
-        self.session.theme = self._theme.get_settings()
+    def game_start(self: Self) -> None:
+        self._start = True
 
     def make_selector(self: Self) -> rio.Component:
         return rio.Card(
             rio.Column(
-                rio.Button(
-                    "Switch theme",
-                    icon="material/dark_mode" if self._theme == Theme.LIGHT else "material/light_mode",
-                    on_press=lambda: self.switch_theme()
-                ),
                 rio.Dropdown(
                     label="Difficulty",
                     options=[Diff.EASY, Diff.MED, Diff.HARD],
@@ -68,7 +53,7 @@ class MainPage(rio.Component):
                     options=[3, 4, 5, 6],
                     selected_value=self._size,
                     on_change=lambda v: setattr(self, "_size", v.value)),
-                rio.Button("Play", on_press=lambda: setattr(self, "_start", True)),
+                rio.Button("Play", on_press=lambda: self.game_start()),
             align_x=0.5,
             align_y=0.2,
             min_width=30
@@ -91,13 +76,17 @@ class MainPage(rio.Component):
     def make_grid(self: Self) -> rio.Component:
         ref_grid = CellRef.generate_grid(self._size)
         field: list[list[rio.Component]] = []
+        win = None
+        if self._board is not None:
+            win = self._board.explain_win()
         for row in ref_grid:
             field.append([
-                comps.Cell(
+                Cell(
                     get_board=self.get_board,
                     on_press=functools.partial(self.on_cell_press, ref),
                     ref=ref,
-                    dim=False
+                    dim=False,
+                    highlight=False if (win is None) or (ref not in win) else True
                 ) for ref in row
             ])
         return rio.Grid(
@@ -113,9 +102,10 @@ class MainPage(rio.Component):
         if self._winner is not None:
             if self._winner == CellState.X:
                 text = "You win!"
-            if self._winner == CellState.EMPTY:
+            elif self._winner == CellState.EMPTY:
                 text = "It's a draw."
-            text = "You lose."
+            else:
+                text = "You lose."
         if self._thinking:
             text = "Thinking..."
         return rio.Column(

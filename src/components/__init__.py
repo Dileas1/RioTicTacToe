@@ -1,1 +1,1 @@
-from .cell import Cell #type: ignore
+from .mainpage import MainPage #type: ignore

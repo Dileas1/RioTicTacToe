@@ -12,6 +12,7 @@ class Cell(rio.Component):
     on_press: rio.EventHandler[[]]
     ref: CellRef
     dim: bool
+    highlight: bool
 
     def build(self: Self) -> rio.Component:
         value = self.ref.get(self.get_board().get())
@@ -25,7 +26,10 @@ class Cell(rio.Component):
                 on_press=self.on_press
             )
 
-        color = rio.Color.RED if value == CellState.X else rio.Color.BLUE
+        if not self.highlight:
+            color = rio.Color.RED if value == CellState.X else rio.Color.BLUE
+        else:
+            color = rio.Color.YELLOW
 
         if self.dim:
             color = color.replace(opacity=0.2)
@@ -34,6 +38,6 @@ class Cell(rio.Component):
             "material/close" if value == CellState.X else "material/circle",
             fill=color,
             min_width=_SIZE,
-            min_height=_SIZE
+            min_height=_SIZE,
         )
 
