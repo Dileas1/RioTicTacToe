@@ -2,7 +2,6 @@ from typing import Self, Literal
 from ..board import Diff, Board
 from ..cells import CellRef, CellState
 from enum import StrEnum
-from threading import Lock, Thread #type: ignore
 from .cell import Cell
 import rio
 import functools
@@ -15,7 +14,6 @@ class Theme(StrEnum):
         if self == Theme.LIGHT:
             return Theme.DARK
         return Theme.LIGHT
-
 
 
 class MainPage(rio.Component):
@@ -116,6 +114,7 @@ class MainPage(rio.Component):
         if self._turn == CellState.O:
             text = "Thinking..."
         return rio.Column(
+            rio.Text(f"Connect {Board.get_win_condition(self._size)} to win!", align_x=0.5),
             grid,
             rio.Text(text, align_x=0.5),
             rio.Button(

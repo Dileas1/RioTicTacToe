@@ -34,7 +34,7 @@ class Board(object):
 # /////////////////////////////////////////
 
     @staticmethod
-    def __get_win_condition(size: int) -> int:
+    def get_win_condition(size: int) -> int:
         if size < 3:
             return 0
         if size in [3, 4]:
@@ -95,7 +95,7 @@ class Board(object):
     def __init__(self: Self, size: int) -> None:
         if size < 3:
             raise BoardException("Size must be 3 or larger.")
-        win_condition = Board.__get_win_condition(size)
+        win_condition = Board.get_win_condition(size)
         self.__grid = [[CellState.EMPTY for _ in range(size)] for _ in range(size)]
         self.__map = CellRef.map_out_all_wins(size, win_condition)
         global __weight_map
