@@ -1,5 +1,6 @@
 from typing import Self, TypeVar
 from .cells import CellRef, CellState, CellWeightMap
+from enum import StrEnum
 import random
 import copy
 
@@ -11,6 +12,12 @@ class BoardException(Exception):
 
 
 __weight_map = CellWeightMap()
+
+
+class Diff(StrEnum):
+    EASY = "Easy"
+    MED = "Medium"
+    HARD = "Hard"
 
 
 class Board(object):
@@ -106,6 +113,13 @@ class Board(object):
 # --- Анализ игры  ------------------------
 # /////////////////////////////////////////
 
+
+    def __check_for_win(self: Self) -> CellState:
+        for row in self.__map:
+            for side in [self.__cpu_side, self.__cpu_side.opposite()]:
+                if all(cell == side for cell in self.__ref2state(row)):
+                    return side
+        return CellState.EMPTY
 
     def __immediate_wins(self: Self, pov: CellState = CellState.EMPTY) -> dict[CellState, list[CellRef]]:
         if pov == CellState.EMPTY:
@@ -216,7 +230,7 @@ class Board(object):
         result: dict[CellRef, tuple[object | CellState, CellState] | None] = {}
         for move in moveset:
             outcome = board.__simulate_move(pov, move)
-            has_anyone_won = outcome.check_for_win()
+            has_anyone_won = outcome.__check_for_win()
             if has_anyone_won != CellState.EMPTY:
                 result[move] = (has_anyone_won, pov)
             elif outcome.is_full():
@@ -284,28 +298,20 @@ class Board(object):
 # /////////////////////////////////////////
 
 
-    def pick_cpu_side(self: Self, side: CellState) -> None:
-        if side != CellState.EMPTY:
-            self.__cpu_side = side
-
     def is_full(self: Self) -> bool:
             for row in self.__grid:
                 if CellState.EMPTY in row:
                     return False
             return True
 
-    def check_for_win(self: Self) -> CellState:
-        for row in self.__map:
-            for side in [self.__cpu_side, self.__cpu_side.opposite()]:
-                if all(cell == side for cell in self.__ref2state(row)):
-                    return side
-        return CellState.EMPTY
-
     def player_move(self: Self, move: CellRef) -> bool:
         return self.__make_a_move(move, self.__cpu_side.opposite())
 
-    def cpu_move(self: Self, move: CellRef) -> bool:
-        return self.__make_a_move(move, self.__cpu_side)
+    def detect_wins_or_draws(self: Self) -> CellState | None:
+        side = self.__check_for_win()
+        if (not self.is_full()) and side == CellState.EMPTY:
+            return None
+        return side
 
 
 # /////////////////////////////////////////
@@ -321,7 +327,7 @@ class Board(object):
         return self.__hesitant_move()
 
     # Средняя сложность - как "мастер ничей", только поддаётся в 50% случаев
-    def medium_diff_move(self: Self) -> CellRef:
+    def med_diff_move(self: Self) -> CellRef:
         return self.__hesitant_move(self.__pick_best_moves(go_easy=True))
 
     def hard_diff_move(self: Self) -> CellRef:
@@ -334,3 +340,14 @@ class Board(object):
         if size == 5:
             depth = 4
         return self.__best_value_move(self.__gigabrain(depth))
+
+    def cpu_move(self: Self, diff: Diff) -> bool:
+        if diff == Diff.EASY:
+            move = self.easy_diff_move()
+        if diff == Diff.HARD:
+            move = self.hard_diff_move()
+        move = self.med_diff_move()
+        return self.__make_a_move(move, self.__cpu_side)
+
+    def get(self: Self) -> list[list[CellState]]:
+        return self.__grid
