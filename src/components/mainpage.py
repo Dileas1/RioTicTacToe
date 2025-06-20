@@ -26,6 +26,7 @@ class MainPage(rio.Component):
     _winner: CellState | None = None
     _theme: Theme = Theme.DARK
     _turn: Literal[CellState.X, CellState.O] = CellState.X
+    _dummy_data: str | None = None
 
     def get_board(self: Self) -> Board:
         if self._board is None:
@@ -60,26 +61,24 @@ class MainPage(rio.Component):
             min_width=30
         ))
 
-    def cpu_move(self: Self) -> None:
+    @rio.event.periodic(0.1)
+    async def cpu_move(self: Self) -> None:
+        if self._winner is not None or self._turn is CellState.X or self._board is None:
+            return
         board = self.get_board()
         board.cpu_move(self._diff)
         self._winner = board.detect_wins_or_draws()
         self._turn = CellState.X
-        self.force_refresh()
 
     async def on_cell_press(self: Self, ref: CellRef) -> None:
         if self._winner is not None or self._turn is CellState.O:
             return
         board = self.get_board()
         board.player_move(ref)
-        self.force_refresh()
         self._winner = board.detect_wins_or_draws()
-        self.force_refresh()
         if self._winner is not None:
             return
         self._turn = CellState.O
-        self.force_refresh()
-        self.cpu_move()
 
     def make_grid(self: Self) -> rio.Component:
         ref_grid = CellRef.generate_grid(self._size)
