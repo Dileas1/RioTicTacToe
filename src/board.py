@@ -341,7 +341,7 @@ class Board(object):
         depth = 3
         size = self.size()
         if size == 3:  # match case юзать опасно, оно только в 3.10 появилось
-            depth = 5  # хрен знает, на какой древней версии это запустят
+            depth = 8  # хрен знает, на какой древней версии это запустят
         if size == 4:
             depth = 5
         if size == 5:
