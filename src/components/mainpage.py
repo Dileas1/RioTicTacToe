@@ -1,8 +1,8 @@
-from typing import Self
+from typing import Self, Literal
 from ..board import Diff, Board
 from ..cells import CellRef, CellState
 from enum import StrEnum
-from threading import Lock
+from threading import Lock, Thread #type: ignore
 from .cell import Cell
 import rio
 import functools
@@ -24,8 +24,8 @@ class MainPage(rio.Component):
     _start: bool = False
     _board: Board | None = None
     _winner: CellState | None = None
-    _thinking: bool = False
     _theme: Theme = Theme.DARK
+    _turn: Literal[CellState.X, CellState.O] = CellState.X
 
     def get_board(self: Self) -> Board:
         if self._board is None:
@@ -36,6 +36,7 @@ class MainPage(rio.Component):
         self._board = None
         self._winner = None
         self._start = False
+        self._turn = CellState.X
 
     def game_start(self: Self) -> None:
         self._start = True
@@ -59,19 +60,26 @@ class MainPage(rio.Component):
             min_width=30
         ))
 
+    def cpu_move(self: Self) -> None:
+        board = self.get_board()
+        board.cpu_move(self._diff)
+        self._winner = board.detect_wins_or_draws()
+        self._turn = CellState.X
+        self.force_refresh()
+
     async def on_cell_press(self: Self, ref: CellRef) -> None:
-        with Lock():
-            if self._winner is not None:
-                return
-            board = self.get_board()
-            board.player_move(ref)
-            self._winner = board.detect_wins_or_draws()
-            if self._winner is not None:
-                return
-            self._thinking = True
-            board.cpu_move(self._diff)
-            self._thinking = False
-            self._winner = board.detect_wins_or_draws()
+        if self._winner is not None or self._turn is CellState.O:
+            return
+        board = self.get_board()
+        board.player_move(ref)
+        self.force_refresh()
+        self._winner = board.detect_wins_or_draws()
+        self.force_refresh()
+        if self._winner is not None:
+            return
+        self._turn = CellState.O
+        self.force_refresh()
+        self.cpu_move()
 
     def make_grid(self: Self) -> rio.Component:
         ref_grid = CellRef.generate_grid(self._size)
@@ -106,7 +114,7 @@ class MainPage(rio.Component):
                 text = "It's a draw."
             else:
                 text = "You lose."
-        if self._thinking:
+        if self._turn == CellState.O:
             text = "Thinking..."
         return rio.Column(
             grid,
